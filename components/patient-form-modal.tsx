@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Calendar } from 'lucide-react';
+import { X, Save, Loader2, Calendar, Sparkles } from 'lucide-react';
 import { supabase, PatientRecord } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getAvailableSlots } from '@/lib/date-utils';
 import { useAuth } from '@/hooks/use-auth';
+import { getAiConfig } from '@/services/aiConfigService';
+import { categorizeLead } from '@/lib/ai-interpreter';
 
 interface PatientFormModalProps {
   isOpen: boolean;
@@ -18,12 +20,14 @@ interface PatientFormModalProps {
 export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFormModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [formData, setFormData] = useState<Partial<PatientRecord>>({
     Nome: '',
     Whatsapp: '',
     tipo_consulta: 'Online',
+    status_conversao: 'Contatos iniciados',
     'Resumo da conversa': '',
     'Inicio do atendimento': format(new Date(), 'dd-MM-yyyy'),
     'Timestamp ultima msg': new Date().toISOString(),
@@ -69,6 +73,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
         Nome: '',
         Whatsapp: '',
         tipo_consulta: 'Online',
+        status_conversao: 'Contatos iniciados',
         'Resumo da conversa': '',
         'Inicio do atendimento': format(new Date(), 'dd-MM-yyyy'),
         'Timestamp ultima msg': new Date().toISOString(),
@@ -77,6 +82,46 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
       });
     }
   }, [patient, isOpen, user?.email]);
+
+  const handleAutoCategorize = async () => {
+    const summary = formData['Resumo da conversa'];
+    if (!summary || summary.length < 5) {
+      setError('Escreva um resumo mais detalhado para que a IA possa categorizar.');
+      return;
+    }
+
+    setAiLoading(true);
+    setError(null);
+    try {
+      const config = await getAiConfig();
+      if (!config) {
+        throw new Error('Configuração de IA não encontrada. Configure a chave API nas configurações.');
+      }
+
+      const result = await categorizeLead(summary, config);
+      
+      setFormData(prev => ({
+        ...prev,
+        status_conversao: result.status_conversao || prev.status_conversao,
+        tipo_consulta: result.tipo_consulta || prev.tipo_consulta,
+        tipo: result.tipo || prev.tipo,
+      }));
+    } catch (err: any) {
+      console.error('AI Categorization error:', err);
+      setError(err.message || 'Erro ao categorizar com IA');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleDateChange = (date: string) => {
+    setFormData(prev => ({
+      ...prev,
+      'Data da consulta': date,
+      status_conversao: date ? 'Consultas Fechadas' : prev.status_conversao,
+      tipo: date ? 'paciente' : prev.tipo
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,6 +208,19 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Status no Funil</label>
+                <select 
+                  value={formData.status_conversao}
+                  onChange={(e) => setFormData({ ...formData, status_conversao: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all appearance-none"
+                >
+                  <option value="Contatos iniciados">Contatos iniciados</option>
+                  <option value="Não qualificados">Não qualificados</option>
+                  <option value="Qualificados">Qualificados</option>
+                  <option value="Consultas Fechadas">Consultas Fechadas</option>
+                </select>
+              </div>
+              <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Modalidade</label>
                 <select 
                   value={formData.tipo_consulta}
@@ -173,13 +231,15 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
                   <option value="Presencial">Presencial</option>
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Data e Hora da Consulta</label>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Data e Hora da Consulta</label>
                 <div className="relative">
                   <select 
                     required
                     value={formData['Data da consulta']}
-                    onChange={(e) => setFormData({ ...formData, 'Data da consulta': e.target.value })}
+                    onChange={(e) => handleDateChange(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all appearance-none pr-10"
                   >
                     <option value="">Selecione um horário disponível</option>
@@ -193,19 +253,33 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
                   <p className="text-[10px] text-orange-500 font-medium mt-1">Nenhum horário disponível nos próximos 15 dias.</p>
                 )}
               </div>
-            </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Resumo da Conversa</label>
-              <textarea 
-                rows={4}
-                value={formData['Resumo da conversa']}
-                onChange={(e) => setFormData({ ...formData, 'Resumo da conversa': e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all resize-none"
-                placeholder="Descreva o motivo do contato..."
-              />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Resumo da Conversa</label>
+                  <button 
+                    type="button"
+                    onClick={handleAutoCategorize}
+                    disabled={aiLoading}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-500 hover:text-brand-600 disabled:opacity-50 transition-all"
+                  >
+                    {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    Categorizar com IA
+                  </button>
+                </div>
+                <textarea 
+                  rows={4}
+                  value={formData['Resumo da conversa']}
+                  onChange={(e) => setFormData({ ...formData, 'Resumo da conversa': e.target.value })}
+                  onBlur={() => {
+                    // Optional: Trigger auto-categorization on blur if the user hasn't manually categorized
+                    // For now, let's stick to the button to avoid excessive API calls
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all resize-none"
+                  placeholder="Descreva o motivo do contato..."
+                />
+              </div>
             </div>
-          </div>
 
           <div className="pt-4 flex gap-3">
             <button 
