@@ -16,12 +16,16 @@ import {
   ArrowRight,
   Database,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { safeFormat } from '@/lib/date-utils';
 import { PatientFormModal } from '@/components/patient-form-modal';
+import { getAiConfig } from '@/services/aiConfigService';
+import { categorizeLead } from '@/lib/ai-interpreter';
 
 const KANBAN_STAGES = [
   { id: 'Contatos iniciados', title: 'Contatos iniciados', color: 'bg-blue-500' },
@@ -34,6 +38,7 @@ export default function KanbanPage() {
   const { user } = useAuth();
   const [records, setRecords] = useState<PatientRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [optimizing, setOptimizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -141,6 +146,45 @@ export default function KanbanPage() {
     setIsModalOpen(true);
   };
 
+  const handleOptimizeFunnel = async () => {
+    if (!confirm('Deseja otimizar todo o funil com IA? Isso analisará o resumo de todos os leads para atualizar seus status e modalidades.')) return;
+    
+    setOptimizing(true);
+    setError(null);
+    try {
+      const config = await getAiConfig();
+      if (!config) throw new Error('IA não configurada.');
+
+      const leadsToOptimize = records.filter(r => !r['Data da consulta']);
+      
+      for (const lead of leadsToOptimize) {
+        const summary = lead['Resumo da conversa'];
+        if (!summary || summary.length < 5) continue;
+
+        const result = await categorizeLead(summary, config);
+        
+        if (result.status_conversao || result.tipo_consulta) {
+          await supabase
+            .from('CRM_Geral')
+            .update({
+              status_conversao: result.status_conversao || lead.status_conversao,
+              tipo_consulta: result.tipo_consulta || lead.tipo_consulta,
+              tipo: result.tipo || lead.tipo,
+              'Timestamp ultima msg': new Date().toISOString()
+            })
+            .eq('Identificador do usuario', lead['Identificador do usuario']);
+        }
+      }
+      
+      await fetchData();
+    } catch (err: any) {
+      console.error('Optimization error:', err);
+      setError('Erro ao otimizar funil: ' + err.message);
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex">
       <Sidebar />
@@ -156,6 +200,14 @@ export default function KanbanPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button 
+              onClick={handleOptimizeFunnel}
+              disabled={optimizing || loading}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 text-brand-500 border border-brand-500 rounded-xl hover:bg-brand-50 transition-all text-sm font-bold disabled:opacity-50"
+            >
+              {optimizing ? <RefreshCw className="animate-spin" size={18} /> : <Sparkles size={18} />}
+              Otimizar Funil (IA)
+            </button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
@@ -248,12 +300,12 @@ export default function KanbanPage() {
                       </p>
 
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {record.modalidade && (
+                        {record.tipo_consulta && (
                           <span className={cn(
                             "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md",
-                            record.modalidade === 'online' ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" : "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
+                            record.tipo_consulta === 'Online' ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" : "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
                           )}>
-                            {record.modalidade}
+                            {record.tipo_consulta}
                           </span>
                         )}
                         {record.origem && (
