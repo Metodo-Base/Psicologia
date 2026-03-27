@@ -188,7 +188,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
               <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Nome Completo</label>
               <input 
                 required
-                value={formData.Nome}
+                value={formData.Nome || ''}
                 onChange={(e) => setFormData({ ...formData, Nome: e.target.value })}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all"
                 placeholder="Ex: João Silva"
@@ -199,7 +199,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
               <label className="text-xs font-bold uppercase tracking-widest text-slate-400">WhatsApp</label>
               <input 
                 required
-                value={formData.Whatsapp}
+                value={formData.Whatsapp || ''}
                 onChange={(e) => setFormData({ ...formData, Whatsapp: e.target.value })}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all"
                 placeholder="Ex: 5511999999999"
@@ -210,7 +210,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Status no Funil</label>
                 <select 
-                  value={formData.status_conversao}
+                  value={formData.status_conversao || ''}
                   onChange={(e) => setFormData({ ...formData, status_conversao: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all appearance-none"
                 >
@@ -223,7 +223,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Modalidade</label>
                 <select 
-                  value={formData.tipo_consulta}
+                  value={formData.tipo_consulta || ''}
                   onChange={(e) => setFormData({ ...formData, tipo_consulta: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all appearance-none"
                 >
@@ -238,7 +238,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
                 <div className="relative">
                   <select 
                     required
-                    value={formData['Data da consulta']}
+                    value={formData['Data da consulta'] || ''}
                     onChange={(e) => handleDateChange(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-50 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all appearance-none pr-10"
                   >
@@ -269,7 +269,7 @@ export function PatientFormModal({ isOpen, onClose, onSave, patient }: PatientFo
                 </div>
                 <textarea 
                   rows={4}
-                  value={formData['Resumo da conversa']}
+                  value={formData['Resumo da conversa'] || ''}
                   onChange={(e) => setFormData({ ...formData, 'Resumo da conversa': e.target.value })}
                   onBlur={() => {
                     // Optional: Trigger auto-categorization on blur if the user hasn't manually categorized
