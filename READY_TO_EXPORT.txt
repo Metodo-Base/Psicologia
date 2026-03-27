@@ -1,0 +1,2 @@
+Este projeto foi limpo e está pronto para exportação.
+Arquivos pesados (package-lock.json e .next) foram removidos para evitar erros de diff.
